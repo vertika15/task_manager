@@ -1,8 +1,13 @@
+from enum import Enum
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, relationship
 from database import get_db, Base
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
 from datetime import datetime
+
+from status_enum import StatusEnum
+from task_history import TaskHistory
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -14,7 +19,7 @@ class Task(Base):
     task_description = Column(String(500), nullable=True)
     due_date = Column(DateTime, nullable=True)
     priority = Column(String(50), nullable=True)  # Example: "Low", "Medium", "High"
-    status = Column(Boolean, default=False)
+    status = Column(Enum(StatusEnum), default=StatusEnum.PENDING)
     category_id = Column(Integer, ForeignKey("categories.category_id"), nullable=True)  # Foreign key to categories table
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -89,3 +94,13 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.delete(task)
     db.commit()
     return {"message": "Task deleted successfully"}
+
+@router.get("/execute/{task_id}")
+def execute_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.task_id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    new_history = TaskHistory(task_id=task_id, status=StatusEnum.COMPLETED.value)
+    db.add(new_history)
+    return {"message":"Task executed successfully", "task": new_history}
+
