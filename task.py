@@ -1,9 +1,12 @@
+import json
 from enum import Enum
+from venv import logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, relationship
 
 from auth import auth_required
+from cache import redis
 from database import get_db, Base
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
 from datetime import datetime
@@ -99,7 +102,7 @@ def update_task(
         task.user_id = user_id
     if category_id:
         task.category_id = category_id
-
+    redis.delete(f"task:{task_id}")
     db.commit()
     return task
 
@@ -113,6 +116,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db), user_id: int = None
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(task)
     db.commit()
+    redis.delete(f"task:{task_id}")
     return {"message": "Task deleted successfully"}
 
 @router.get("/execute/{task_id}")
@@ -126,3 +130,29 @@ def execute_task(task_id: int, db: Session = Depends(get_db), user_id: int = Non
     db.add(new_history)
     return {"message":"Task executed successfully", "task": new_history}
 
+
+@router.get("/tasks/{task_id}")
+async def get_task(task_id: int, db=Depends(get_db)):
+    return await get_task_from_cache(task_id, db)
+
+async def get_task_from_cache(task_id: int, db: Depends(get_db)):
+    cached_task = await redis.get(f"task:{task_id}")
+    if cached_task:
+        return json.loads(cached_task).get("task_name", "Task not found")
+
+    task = db.query(Task).filter(Task.task_id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    await redis.setex(f"task:{task_id}", 300, json.dumps(task_to_dict(task)))
+    return task_to_dict(task)
+
+
+def task_to_dict(task):
+    return {
+        "task_id": task.task_id,
+        "task_name": task.task_name,
+        "task_description": task.task_description,
+        "user_id": task.user_id,
+        "due_date": task.due_date,
+    }
