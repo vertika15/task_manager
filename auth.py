@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+
 # Secret key used to sign the JWT
 JWT_SECRET = "your-secret-key"  # Replace with a secure secret key
 JWT_ALGORITHM = "HS256"  # Algorithm to use for signing
@@ -56,4 +57,5 @@ def auth_required(credentials: HTTPAuthorizationCredentials = Security(security)
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
 

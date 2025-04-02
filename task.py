@@ -2,12 +2,15 @@ from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, relationship
+
+from auth import auth_required
 from database import get_db, Base
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
 from datetime import datetime
 
 from status_enum import StatusEnum
 from task_history import TaskHistory
+from users import is_same_user
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -36,11 +39,14 @@ def add_task(
     task_description: str = None,
     due_date: datetime = None,
     priority: str = None,
-    status: bool = False,
+    status: StatusEnum = StatusEnum.PENDING,
     user_id: int = None,
     category_id: int = None,
+    payload: dict = Depends(auth_required),
     db: Session = Depends(get_db),
 ):
+    if not is_same_user(payload, user_id, db):
+        raise HTTPException(status_code=403, detail="You are not authorized to update this task")
     new_task = Task(
         task_name=task_name,
         task_description=task_description,
@@ -56,19 +62,29 @@ def add_task(
 
 @router.put("/update/{id}")
 def update_task(
-    task_id: int,
-    task_name: str = None,
-    task_description: str = None,
-    due_date: datetime = None,
-    priority: str = None,
-    status: bool = None,
-    user_id: int = None,
-    category_id: int = None,
-    db: Session = Depends(get_db),
+        task_id: int,
+        task_name: str = None,
+        task_description: str = None,
+        due_date: datetime = None,
+        priority: str = None,
+        status: StatusEnum = None,
+        user_id: int = None,
+        category_id: int = None,
+        payload: dict = Depends(auth_required),
+        db: Session = Depends(get_db),
 ):
+    if not is_same_user(payload, user_id, db):
+        raise HTTPException(status_code=403, detail="You are not authorized to update this task")
+
+    # Fetch the task to be updated
     task = db.query(Task).filter(Task.task_id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.user_id != user_id:
+        raise HTTPException(status_code=403, detail="You are not authorized to update this task")
+
+    # Update the task fields if they are provided in the request
     if task_name:
         task.task_name = task_name
     if task_description:
@@ -83,11 +99,15 @@ def update_task(
         task.user_id = user_id
     if category_id:
         task.category_id = category_id
+
     db.commit()
     return task
 
+
 @router.delete("/delete/{id}")
-def delete_task(task_id: int, db: Session = Depends(get_db)):
+def delete_task(task_id: int, db: Session = Depends(get_db), user_id: int = None, payload: dict = Depends(auth_required)):
+    if not is_same_user(payload, user_id, db):
+        raise HTTPException(status_code=403, detail="You are not authorized to update this task")
     task = db.query(Task).filter(Task.task_id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -96,7 +116,9 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     return {"message": "Task deleted successfully"}
 
 @router.get("/execute/{task_id}")
-def execute_task(task_id: int, db: Session = Depends(get_db)):
+def execute_task(task_id: int, db: Session = Depends(get_db), user_id: int = None, payload: dict = Depends(auth_required)):
+    if not is_same_user(payload, user_id, db):
+        raise HTTPException(status_code=403, detail="You are not authorized to update this task")
     task = db.query(Task).filter(Task.task_id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
