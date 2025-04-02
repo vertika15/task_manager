@@ -1,19 +1,17 @@
 import json
-from enum import Enum
-from venv import logger
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, relationship
 
+from api.task_history import TaskHistory
 from auth import auth_required
-from cache import redis
-from database import get_db, Base
+from cache.cache import redis
+from database.database import get_db, Base
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
 from datetime import datetime
 
-from status_enum import StatusEnum
-from task_history import TaskHistory
-from users import is_same_user
+from models.status_enum import StatusEnum
+from api.users import is_same_user
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -128,11 +126,14 @@ def execute_task(task_id: int, db: Session = Depends(get_db), user_id: int = Non
         raise HTTPException(status_code=404, detail="Task not found")
     new_history = TaskHistory(task_id=task_id, status=StatusEnum.COMPLETED.value)
     db.add(new_history)
+    db.commit()
     return {"message":"Task executed successfully", "task": new_history}
 
 
 @router.get("/tasks/{task_id}")
-async def get_task(task_id: int, db=Depends(get_db)):
+async def get_task(task_id: int, db=Depends(get_db), user_id: int = None, payload: dict = Depends(auth_required)):
+    if not is_same_user(payload, user_id, db):
+        raise HTTPException(status_code=403, detail="You are not to fetch this task.")
     return await get_task_from_cache(task_id, db)
 
 async def get_task_from_cache(task_id: int, db: Depends(get_db)):

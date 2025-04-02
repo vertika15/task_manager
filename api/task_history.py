@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, relationship
 
 from auth import auth_required
-from database import get_db, Base
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
+from database.database import get_db, Base
+from sqlalchemy import Column, Integer, ForeignKey, DateTime, Enum
 from datetime import datetime
 
-from status_enum import StatusEnum
-from users import is_same_user
+from models.status_enum import StatusEnum
+from api.users import is_same_user
 
 router = APIRouter(prefix="/task-history", tags=["task-history"])
 

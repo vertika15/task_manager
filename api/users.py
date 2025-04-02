@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from werkzeug.security import generate_password_hash, check_password_hash
-from database import get_db, Base
+from database.database import get_db, Base
 from sqlalchemy import Column, Integer, String
 from auth import create_access_token, auth_required
 

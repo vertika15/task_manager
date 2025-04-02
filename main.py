@@ -1,9 +1,9 @@
 from fastapi import FastAPI
-from database import engine, Base
-from users import router as user_router
-from task import router as task_router
-from task_history import router as task_history_router
-from categories import router as categories_router
+from database.database import engine, Base
+from api.users import router as user_router
+from api.task import router as task_router
+from api.task_history import router as task_history_router
+from api.categories import router as categories_router
  
 app = FastAPI()
 
