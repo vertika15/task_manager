@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from werkzeug.security import generate_password_hash, check_password_hash
 from database.database import get_db, Base
@@ -7,6 +8,9 @@ from auth import create_access_token, auth_required
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 class User(Base):
     __tablename__ = "users"
@@ -16,18 +20,22 @@ class User(Base):
     password = Column(String(200), nullable=False)
 
 
+@router.options("/login")
+def preflight():
+    return {"message": "Preflight worked."}
+
 @router.post("/login")
-def login(email: str, password: str, db: Session = Depends(get_db)):
+def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
     Authenticates a user and returns a JWT token.
     """
     # Check if user exists
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == request.email).first()
     if not user:
         raise HTTPException(status_code=404, detail="Invalid email or password")
 
     # Verify password
-    if not check_password_hash(user.password, password):
+    if not check_password_hash(user.password, request.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     # Generate JWT token
