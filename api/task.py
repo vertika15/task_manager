@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, relationship
 
 from api.task_history import TaskHistory
@@ -35,8 +35,9 @@ def read_tasks(db: Session = Depends(get_db)):
     return db.query(Task).all()
 
 @router.post("/add")
-def add_task(
-    task_name: str,
+async def add_task(
+        request: Request,
+    task_name: str = None,
     task_description: str = None,
     due_date: datetime = None,
     priority: str = None,
@@ -46,6 +47,16 @@ def add_task(
     payload: dict = Depends(auth_required),
     db: Session = Depends(get_db),
 ):
+    req_body = await request.json()
+    if user_id is None:
+        task_name = req_body.get("title")
+        user_id = int(req_body.get("user_id"))
+        task_description = req_body.get("description")
+        due_date = datetime.strptime(req_body.get("deadline"), "%Y-%m-%d")
+        priority = req_body.get("priority")
+        status = req_body.get("status")
+        category_id = req_body.get("category_id")
+
     if not is_same_user(payload, user_id, db):
         raise HTTPException(status_code=403, detail="You are not authorized to update this task")
     new_task = Task(
@@ -118,7 +129,9 @@ def delete_task(task_id: int, db: Session = Depends(get_db), user_id: int = None
     return {"message": "Task deleted successfully"}
 
 @router.get("/execute/{task_id}")
-def execute_task(task_id: int, db: Session = Depends(get_db), user_id: int = None, payload: dict = Depends(auth_required)):
+def execute_task(task_id: int, request: Request, db: Session = Depends(get_db), user_id: int = None, payload: dict = Depends(auth_required)):
+    if user_id is None:
+        user_id = int(request.query_params["userId"])
     if not is_same_user(payload, user_id, db):
         raise HTTPException(status_code=403, detail="You are not authorized to update this task")
     task = db.query(Task).filter(Task.task_id == task_id).first()
@@ -129,9 +142,11 @@ def execute_task(task_id: int, db: Session = Depends(get_db), user_id: int = Non
     db.commit()
     return {"message":"Task executed successfully", "task": new_history}
 
+@router.get("/{task_id}")
+async def get_task(task_id: int,  request: Request, db=Depends(get_db), user_id: int = None, payload: dict = Depends(auth_required)):
+    if user_id is None:
+        user_id = int(request.query_params["userId"])
 
-@router.get("/tasks/{task_id}")
-async def get_task(task_id: int, db=Depends(get_db), user_id: int = None, payload: dict = Depends(auth_required)):
     if not is_same_user(payload, user_id, db):
         raise HTTPException(status_code=403, detail="You are not to fetch this task.")
     return await get_task_from_cache(task_id, db)
@@ -155,5 +170,4 @@ def task_to_dict(task):
         "task_name": task.task_name,
         "task_description": task.task_description,
         "user_id": task.user_id,
-        "due_date": task.due_date,
     }

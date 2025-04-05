@@ -20,10 +20,6 @@ class User(Base):
     password = Column(String(200), nullable=False)
 
 
-@router.options("/login")
-def preflight():
-    return {"message": "Preflight worked."}
-
 @router.post("/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """

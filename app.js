@@ -1,229 +1,200 @@
-// Base API URLs
-const BASE_URL = "http://localhost:8000";
-const TASK_API = `${BASE_URL}/tasks`;
-const USER_API = `${BASE_URL}/users`;
-const TASK_HISTORY_API = `${BASE_URL}/task-history`;
-const CATEGORY_API = `${BASE_URL}/categories`;
+document.addEventListener("DOMContentLoaded", () => {
+  const API_BASE = "http://localhost:8000";
 
-// Auth Token (You would retrieve this upon login and store it, e.g., in localStorage or a cookie)
-let authToken = localStorage.getItem("authToken");
+  const loginModal = document.getElementById("loginModal");
+  const loginForm = document.getElementById("loginForm");
+  const loginMessage = document.getElementById("loginMessage");
+  const mainContent = document.getElementById("mainContent");
+  const logoutButton = document.getElementById("logoutButton");
 
-// Generic function to make authenticated requests
-function authenticatedFetch(url, options = {}) {
-  if (!authToken) {
-    console.error("User not authenticated. Please log in.");
-    return;
-  }
+  const addTaskForm = document.getElementById("addTaskForm");
+  const getTaskForm = document.getElementById("getTaskForm");
+  const addCategoryForm = document.getElementById("addCategoryForm");
 
-  options.headers = options.headers || {};
-  options.headers["Authorization"] = `Bearer ${authToken}`;
-  return fetch(url, options).then((response) => {
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
+  // Helper: Get the stored token from localStorage
+  const token = () => localStorage.getItem("token");
+
+  // Show/hide modal
+  const showLoginModal = () => (loginModal.style.display = "flex");
+  const hideLoginModal = () => (loginModal.style.display = "none");
+
+  // Show/hide main content
+  const showMainContent = () => mainContent.classList.remove("hidden");
+  const hideMainContent = () => mainContent.classList.add("hidden");
+
+  // Function to clear token and reload page
+  const logout = () => {
+    localStorage.removeItem("token"); // Delete token from localStorage
+    window.location.reload(); // Reload the page to reset state
+  };
+
+  // Function to check authentication on page load
+  const checkAuthentication = () => {
+    const authToken = token();
+    if (!authToken) {
+      showLoginModal();
+      hideMainContent();
+    } else {
+      hideLoginModal();
+      showMainContent();
     }
-    return response.json();
+  };
+
+  // Login form submission handler
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault(); // Prevent form submission from reloading the page
+
+    const email = document.getElementById("loginEmail").value;
+    const password = document.getElementById("loginPassword").value;
+
+    try {
+      const response = await fetch(`${API_BASE}/users/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.detail || "Login failed");
+
+      localStorage.setItem("token", result.access_token); // Save token
+      loginMessage.textContent = "✅ Login successful!";
+      loginMessage.className = "success";
+
+      hideLoginModal();
+      showMainContent();
+    } catch (error) {
+      loginMessage.textContent = `❌ ${error.message}`;
+      loginMessage.className = "error";
+    }
   });
-}
 
-// =============================================================
-// 1. User Management API
-// =============================================================
+  // Add Task Handler
+  // Add Task Handler
+addTaskForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
 
-function loginUser(email, password) {
-  fetch(`${USER_API}/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json", // Explicitly set Content-Type
-    },
-    body: JSON.stringify({ email, password }), // Properly stringify the payload
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error("Failed to log in. Check credentials.");
-      }
-      return response.json();
-    })
-    .then((data) => {
-      // Store the token and inform the user
-      authToken = data.access_token;
-      localStorage.setItem("authToken", authToken);
-      console.log("Login successful:", data);
-      document.getElementById("login-message").textContent = "Logged in successfully!";
-    })
-    .catch((error) => {
-      console.error("Error logging in:", error);
-      document.getElementById("login-message").textContent = "Login failed. Check credentials.";
+  const formData = new FormData(addTaskForm);
+  const taskData = Object.fromEntries(formData);
+
+  try {
+    // Send the taskData with the additional fields to the API
+    const response = await fetch(`${API_BASE}/tasks/add`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token()}`,
+      },
+      body: JSON.stringify(taskData), // Include all form data
     });
-}
 
-// Register User
-function registerUser(name, email, password) {
-  fetch(`${USER_API}/add`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password }),
-  })
-    .then((response) => response.json())
-    .then((data) => console.log("User registered successfully:", data))
-    .catch((error) => console.error("Error registering user:", error));
-}
+    const result = await response.json();
 
-// Update User
-function updateUser(userId, name, email, password) {
-  authenticatedFetch(`${USER_API}/update/${userId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password }),
-  })
-    .then((data) => console.log("User updated successfully:", data))
-    .catch((error) => console.error("Error updating user:", error));
-}
-
-// Delete User
-function deleteUser(userId) {
-  authenticatedFetch(`${USER_API}/delete/${userId}`, { method: "DELETE" })
-    .then((data) => console.log(data.message))
-    .catch((error) => console.error("Error deleting user:", error));
-}
-
-// =============================================================
-// 2. Task Management API
-// =============================================================
-
-// Fetch Tasks
-function fetchTasks() {
-  authenticatedFetch(TASK_API)
-    .then((tasks) => {
-      // Render tasks in your UI
-      console.log("Fetched tasks:", tasks);
-    })
-    .catch((error) => console.error("Error fetching tasks:", error));
-}
-
-// Add New Task
-function addTask(taskName, taskDescription, userId, dueDate, priority, categoryId) {
-  authenticatedFetch(`${TASK_API}/add`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      task_name: taskName,
-      task_description: taskDescription,
-      user_id: userId,
-      due_date: dueDate,
-      priority: priority,
-      category_id: categoryId,
-    }),
-  })
-    .then((data) => console.log("Task added successfully:", data))
-    .catch((error) => console.error("Error adding task:", error));
-}
-
-// Update Task
-function updateTask(taskId, updates) {
-  authenticatedFetch(`${TASK_API}/update/${taskId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(updates),
-  })
-    .then((data) => console.log("Task updated successfully:", data))
-    .catch((error) => console.error("Error updating task:", error));
-}
-
-// Delete Task
-function deleteTask(taskId) {
-  authenticatedFetch(`${TASK_API}/delete/${taskId}`, { method: "DELETE" })
-    .then((data) => console.log(data.message))
-    .catch((error) => console.error("Error deleting task:", error));
-}
-
-// Execute Task
-function executeTask(taskId) {
-  authenticatedFetch(`${TASK_API}/execute/${taskId}`)
-    .then((data) => console.log("Task executed successfully:", data))
-    .catch((error) => console.error("Error executing task:", error));
-}
-
-// =============================================================
-// 3. Task History
-// =============================================================
-
-// Fetch Task History
-function fetchTaskHistory() {
-  authenticatedFetch(TASK_HISTORY_API)
-    .then((taskHistory) => console.log("Task history fetched:", taskHistory))
-    .catch((error) => console.error("Error fetching task history:", error));
-}
-
-// Fetch Task History by Task ID
-function fetchTaskHistoryByTaskId(taskId, userId) {
-  authenticatedFetch(`${TASK_HISTORY_API}/task/${taskId}`)
-    .then((history) => console.log("Task history for task:", history))
-    .catch((error) => console.error("Error fetching task history:", error));
-}
-
-// =============================================================
-// 4. Category Management API
-// =============================================================
-
-// Fetch Categories
-function fetchCategories() {
-  authenticatedFetch(CATEGORY_API)
-    .then((categories) => console.log("Fetched categories:", categories))
-    .catch((error) => console.error("Error fetching categories:", error));
-}
-
-// Add Category
-function addCategory(categoryName, categoryDescription, userId) {
-  authenticatedFetch(`${CATEGORY_API}/add`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      category_name: categoryName,
-      category_description: categoryDescription,
-      user_id: userId,
-    }),
-  })
-    .then((data) => console.log("Category added successfully:", data))
-    .catch((error) => console.error("Error adding category:", error));
-}
-
-// Update Category
-function updateCategory(categoryId, name, description, userId) {
-  authenticatedFetch(`${CATEGORY_API}/update/${categoryId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      category_name: name,
-      category_description: description,
-      user_id: userId,
-    }),
-  })
-    .then((data) => console.log("Category updated successfully:", data))
-    .catch((error) => console.error("Error updating category:", error));
-}
-
-// Delete Category
-function deleteCategory(categoryId, userId) {
-  authenticatedFetch(`${CATEGORY_API}/delete/${categoryId}`, {
-    method: "DELETE",
-  })
-    .then((data) => console.log(data.message))
-    .catch((error) => console.error("Error deleting category:", error));
-}
-
-// =============================================================
-// Initialize the App
-// =============================================================
-
-function initializeApp() {
-  const isAuthenticated = !!authToken;
-  if (isAuthenticated) {
-    console.log("User authenticated. Fetching tasks...");
-    fetchTasks();
-  } else {
-    console.log("User not authenticated. Please log in.");
+    if (!response.ok) throw new Error(result.detail || "Failed to add task");
+    alert("Task added successfully!");
+    addTaskForm.reset(); // Clear the form
+  } catch (error) {
+    alert(`Error: ${error.message}`);
   }
-}
+});
 
-// Initialize app when the page loads
-initializeApp();
+  // Get Task by ID Handler
+  getTaskForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(getTaskForm);
+    const taskId = formData.get("taskId");
+    const userId = formData.get("userId"); // Get User ID from the form
+
+    try {
+      const response = await fetch(`${API_BASE}/tasks/${taskId}?userId=${userId}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token()}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.detail || "Task not found");
+
+      alert(`Task Retrieved: \n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    }
+  });
+
+  // Expose this to index, once fixed
+const getMyTasksForm = document.getElementById("getMyTasksForm");
+
+getMyTasksForm.addEventListener("submit", async (e) => {
+  e.preventDefault(); // Prevent page reload on form submission
+
+  const formData = new FormData(getMyTasksForm);
+  const userId = formData.get("userId");
+
+  try {
+    const response = await fetch(`${API_BASE}/tasks/my_tasks?user_id=${userId}`, {
+  method: "GET",
+  headers: {
+    Authorization: `Bearer ${token()}`,
+  },
+});
+
+    const result = await response.json();
+
+    if (!response.ok) throw new Error(result.detail || "Failed to fetch tasks");
+
+    // Display tasks in a formatted way (you can enhance this as needed)
+    if (result.length === 0) {
+      alert("No tasks found for the provided user ID.");
+    } else {
+      const tasks = result
+        .map(
+          (task) =>
+            `Task ID: ${task.task_id}, Name: ${task.task_name}, Description: ${task.task_description || "N/A"}`
+        )
+        .join("\n");
+
+      alert(`Your Tasks:\n\n${tasks}`);
+    }
+  } catch (error) {
+    alert(`Error: ${error.message}`);
+  }
+});
+
+  // Add Category Handler
+addCategoryForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const formData = new FormData(addCategoryForm);
+  const categoryData = Object.fromEntries(formData); // Convert form data to an object
+
+  try {
+    const response = await fetch(`${API_BASE}/categories/add`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token()}`,
+      },
+      body: JSON.stringify(categoryData), // Includes categoryName and category_description
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) throw new Error(result.detail || "Failed to add category");
+
+    alert("Category added successfully!");
+    addCategoryForm.reset(); // Clear the form
+  } catch (error) {
+    alert(`Error: ${error.message}`);
+  }
+});
+
+  // Logout button listener
+  logoutButton.addEventListener("click", logout);
+
+  // Check authentication status after DOM loads
+  checkAuthentication();
+});

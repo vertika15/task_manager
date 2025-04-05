@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, relationship
 
 from auth import auth_required
@@ -23,7 +23,13 @@ def read_categories(db: Session = Depends(get_db)):
     return db.query(Category).all()
 
 @router.post("/add")
-def add_category(category_name: str, category_description: str = None, user_id: int = None, db: Session = Depends(get_db), payload: dict = Depends(auth_required) ):
+async def add_category(request: Request, category_name: str = None, category_description: str = None, user_id: int = None, db: Session = Depends(get_db), payload: dict = Depends(auth_required) ):
+    if user_id is None:
+        req_body = await request.json()
+        user_id = int(req_body.get("userId"))
+        category_name = req_body.get("categoryName")
+        category_description = req_body.get("category_description")
+
     if not is_same_user(payload, user_id, db):
         raise HTTPException(status_code=403, detail="You are not authorized to update this task")
     category = db.query(Category).filter(Category.category_name == category_name).first()
